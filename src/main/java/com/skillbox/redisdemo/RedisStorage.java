@@ -8,8 +8,10 @@ import org.redisson.client.RedisConnectionException;
 import org.redisson.config.Config;
 
 import java.util.Date;
+import java.util.Random;
 
 import static java.lang.System.out;
+import static java.lang.System.setOut;
 
 public class RedisStorage {
 
@@ -22,7 +24,10 @@ public class RedisStorage {
     // Объект для работы с Sorted Set'ом
     private RScoredSortedSet<String> onlineUsers;
 
-    private final static String KEY = "ONLINE_USERS";
+    // Количество users
+    private int countsUsers;
+
+    private final static String KEY = "USERS";
 
     private double getTs() {
         return new Date().getTime() / 1000;
@@ -58,20 +63,38 @@ public class RedisStorage {
     void logPageVisit(int user_id)
     {
         //ZADD ONLINE_USERS
-        onlineUsers.add(getTs(), String.valueOf(user_id));
+        onlineUsers.add(user_id, String.valueOf(user_id));
     }
 
-    // Удаляет
-    void deleteOldEntries(int secondsAgo)
-    {
-        //ZREVRANGEBYSCORE ONLINE_USERS 0 <time_5_seconds_ago>
-        onlineUsers.removeRangeByScore(0, true, getTs() - secondsAgo, true);
+    void read() throws InterruptedException {
+        countsUsers = onlineUsers.size();
+        out.println(countsUsers);
+        for(;;){
+            String a = onlineUsers.takeFirst();
+            out.println("- На главной странице показываем пользователя " + a);
+            int rand = (int)(Math.random() * 200) + 1;
+            if(rand <= 20 && rand != Integer.parseInt(a))
+            {
+                out.println("> Пользователь \"" + rand + "\" оплатил подписку ");
+               // out.print(onlineUsers.getScore(String.valueOf(rand)) + " ------ ");
+                onlineUsers.addScore(String.valueOf(rand), 1-onlineUsers.getScore(String.valueOf(rand)));
+              //  out.println (onlineUsers.getScore(String.valueOf(rand)));
 
+                for(int j = rand; j <=onlineUsers.size(); j++ )
+                {
+                    onlineUsers.addScore(String.valueOf(j), -1.0);
+                }
+            }
+            else{
+                for (String user : onlineUsers)
+                {
+                    onlineUsers.addScore(user, -1.0);
+                }
+            }
 
-    }
-    int calculateUsersNumber()
-    {
-        //ZCOUNT ONLINE_USERS
-        return onlineUsers.count(Double.NEGATIVE_INFINITY, true, Double.POSITIVE_INFINITY, true);
+            Thread.sleep(250);
+
+            onlineUsers.add(20.0, a);
+        }
     }
 }
